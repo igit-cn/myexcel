@@ -12,22 +12,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.liaochong.myexcel.core.converter;
+package com.github.liaochong.myexcel.core.converter.writer;
+
+import com.github.liaochong.myexcel.core.container.Pair;
+import com.github.liaochong.myexcel.core.converter.WriteConverter;
 
 import java.lang.reflect.Field;
+import java.math.BigDecimal;
 
 /**
+ * bigdecimal格式化
+ *
  * @author liaochong
  * @version 1.0
  */
-public class StringReadConverter implements ReadConverter {
+public class BigDecimalWriteConverter implements WriteConverter {
 
     @Override
-    public boolean convert(String content, Field field, Object obj) throws Exception {
-        if (field.getType() != String.class) {
-            return false;
-        }
-        field.set(obj, content);
-        return true;
+    public Pair<Class, Object> convert(Field field, Object fieldVal) {
+        return Pair.of(Double.class, ((BigDecimal) fieldVal).toPlainString());
+    }
+
+    @Override
+    public boolean support(Field field, Object fieldVal) {
+        return field.getType() == BigDecimal.class;
     }
 }

@@ -19,6 +19,7 @@ import lombok.AccessLevel;
 import lombok.Data;
 import lombok.experimental.FieldDefaults;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -37,13 +38,22 @@ public class Tr {
     /**
      * 行单元格
      */
-    List<Td> tdList;
+    List<Td> tdList = Collections.emptyList();
     /**
      * 最大宽度
      */
     Map<Integer, Integer> colWidthMap;
+    /**
+     * 是否可见
+     */
+    boolean visibility = true;
+    /**
+     * 行高度
+     */
+    int height;
 
-    public Tr(int index) {
+    public Tr(int index, int height) {
         this.index = index;
+        this.height = height;
     }
 }

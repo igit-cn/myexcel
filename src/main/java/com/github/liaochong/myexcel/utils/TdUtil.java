@@ -35,6 +35,8 @@ public final class TdUtil {
 
     private static Pattern digitalPattern = Pattern.compile("^\\d+$");
 
+    private static Pattern nonDigitalPattern = Pattern.compile("[^\\d]+");
+
     private static final Cache<String, Integer> SPAN_CACHE = new WeakCache<>();
 
     public static int get(IntSupplier firstSupplier, IntSupplier secondSupplier) {
@@ -52,8 +54,7 @@ public final class TdUtil {
             SPAN_CACHE.cache(span, 0);
             return 0;
         }
-        int spanVal = Integer.parseInt(span);
-        int result = spanVal > 1 ? spanVal : 0;
+        int result = Integer.parseInt(span);
         SPAN_CACHE.cache(span, result);
         return result;
     }
@@ -86,5 +87,13 @@ public final class TdUtil {
         }
         // 进位取整
         return (int) Math.ceil(valueLength);
+    }
+
+    public static int getValue(String v) {
+        if (v == null) {
+            return -1;
+        }
+        String realValue = nonDigitalPattern.matcher(v).replaceAll("");
+        return Integer.parseInt(realValue);
     }
 }

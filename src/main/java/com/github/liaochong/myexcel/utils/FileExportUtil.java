@@ -15,7 +15,7 @@
  */
 package com.github.liaochong.myexcel.utils;
 
-import com.github.liaochong.myexcel.core.io.TempFileOperator;
+import com.github.liaochong.myexcel.core.constant.Constants;
 import lombok.experimental.UtilityClass;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.openxml4j.opc.OPCPackage;
@@ -53,13 +53,13 @@ public final class FileExportUtil {
      * @throws IOException IOException
      */
     public static void export(Workbook workbook, File file) throws IOException {
-        String suffix = ".xlsx";
+        String suffix = Constants.XLSX;
         if (workbook instanceof HSSFWorkbook) {
             if (file.getName().endsWith(suffix)) {
                 String absolutePath = file.getAbsolutePath();
                 file = Paths.get(absolutePath.substring(0, absolutePath.length() - 1)).toFile();
             }
-            suffix = ".xls";
+            suffix = Constants.XLS;
         }
         if (!file.getName().endsWith(suffix)) {
             file = Paths.get(file.getAbsolutePath() + suffix).toFile();
@@ -86,7 +86,7 @@ public final class FileExportUtil {
         if (workbook instanceof HSSFWorkbook) {
             throw new IllegalArgumentException("Document encryption for.xls is not supported");
         }
-        String suffix = ".xlsx";
+        String suffix = Constants.XLSX;
         if (!file.getName().endsWith(suffix)) {
             file = Paths.get(file.getAbsolutePath() + suffix).toFile();
         }
@@ -95,7 +95,6 @@ public final class FileExportUtil {
             if (workbook instanceof SXSSFWorkbook) {
                 ((SXSSFWorkbook) workbook).dispose();
             }
-            workbook.close();
 
             final POIFSFileSystem fs = new POIFSFileSystem();
             final EncryptionInfo info = new EncryptionInfo(EncryptionMode.standard);
@@ -109,6 +108,8 @@ public final class FileExportUtil {
             try (FileOutputStream fileOutputStream = new FileOutputStream(file)) {
                 fs.writeFilesystem(fileOutputStream);
             }
+        } finally {
+            workbook.close();
         }
     }
 
@@ -119,23 +120,26 @@ public final class FileExportUtil {
      * @return InputStream
      */
     public static InputStream getInputStream(final Workbook workbook) {
-        TempFileOperator tempFileOperator = new TempFileOperator();
-        String suffix = ".xlsx";
+        String suffix = Constants.XLSX;
         if (workbook instanceof HSSFWorkbook) {
-            suffix = ".xls";
+            suffix = Constants.XLS;
         }
-        Path path = tempFileOperator.createTempFile("tem_outs", suffix);
+        Path path = TempFileOperator.createTempFile("tem_outs", suffix);
         try {
             workbook.write(Files.newOutputStream(path));
             if (workbook instanceof SXSSFWorkbook) {
                 ((SXSSFWorkbook) workbook).dispose();
             }
-            workbook.close();
             return Files.newInputStream(path);
         } catch (IOException e) {
             throw new RuntimeException(e);
         } finally {
-            tempFileOperator.deleteTempFile();
+            try {
+                workbook.close();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            TempFileOperator.deleteTempFile(path);
         }
     }
 }

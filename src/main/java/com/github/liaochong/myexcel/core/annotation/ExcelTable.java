@@ -51,7 +51,7 @@ public @interface ExcelTable {
      *
      * @return WorkbookType
      */
-    WorkbookType workbookType() default WorkbookType.XLSX;
+    WorkbookType workbookType() default WorkbookType.SXLSX;
 
     /**
      * sheeName
@@ -59,13 +59,6 @@ public @interface ExcelTable {
      * @return sheeName
      */
     String sheetName() default "";
-
-    /**
-     * 内存行数保有量，只在WorkbookType.SXLSX有效
-     *
-     * @return 行数
-     */
-    int rowAccessWindowSize() default -1;
 
     /**
      * 是否使用字段名称作为标题
@@ -80,4 +73,46 @@ public @interface ExcelTable {
      * @return 默认值
      */
     String defaultValue() default "";
+
+    /**
+     * 是否自动换行
+     *
+     * @return true/false
+     */
+    boolean wrapText() default true;
+
+    /**
+     * 是否过滤静态字段
+     *
+     * @return true/false
+     */
+    boolean ignoreStaticFields() default true;
+
+    /**
+     * 标题分离器
+     *
+     * @return 分离器
+     */
+    String titleSeparator() default "->";
+
+    /**
+     * 标题行高度
+     *
+     * @return 标题行高度
+     */
+    int titleRowHeight() default -1;
+
+    /**
+     * 普通行高度
+     *
+     * @return 普通行高度
+     */
+    int rowHeight() default -1;
+
+    /**
+     * 样式
+     *
+     * @return 样式
+     */
+    String[] style() default {};
 }

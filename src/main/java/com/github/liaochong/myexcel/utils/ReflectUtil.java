@@ -15,11 +15,19 @@
  */
 package com.github.liaochong.myexcel.utils;
 
+import com.github.liaochong.myexcel.core.annotation.ExcelColumn;
+import com.github.liaochong.myexcel.core.cache.WeakCache;
 import com.github.liaochong.myexcel.core.reflect.ClassFieldContainer;
 import lombok.experimental.UtilityClass;
 
 import java.lang.reflect.Field;
+import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * @author liaochong
@@ -27,6 +35,8 @@ import java.util.Objects;
  */
 @UtilityClass
 public final class ReflectUtil {
+
+    private static final WeakCache<Class<?>, Map<Integer, Field>> FIELD_CACHE = new WeakCache<>();
 
     /**
      * 获取指定类的所有字段，包含父类字段，其中
@@ -38,6 +48,34 @@ public final class ReflectUtil {
         ClassFieldContainer container = new ClassFieldContainer();
         getAllFieldsOfClass(clazz, container);
         return container;
+    }
+
+    public static Map<Integer, Field> getFieldMapOfExcelColumn(Class<?> dataType) {
+        Map<Integer, Field> fieldMap = FIELD_CACHE.get(dataType);
+        if (Objects.nonNull(fieldMap)) {
+            return fieldMap;
+        }
+        ClassFieldContainer classFieldContainer = ReflectUtil.getAllFieldsOfClass(dataType);
+        List<Field> fields = classFieldContainer.getFieldsByAnnotation(ExcelColumn.class);
+        if (fields.isEmpty()) {
+            throw new IllegalStateException("There is no field with @ExcelColumn");
+        }
+        fieldMap = new HashMap<>(fields.size());
+        for (Field field : fields) {
+            ExcelColumn excelColumn = field.getAnnotation(ExcelColumn.class);
+            int index = excelColumn.index();
+            if (index < 0) {
+                continue;
+            }
+            Field f = fieldMap.get(index);
+            if (Objects.nonNull(f)) {
+                throw new IllegalStateException("Index cannot be repeated. Please check it.");
+            }
+            field.setAccessible(true);
+            fieldMap.put(index, field);
+        }
+        FIELD_CACHE.cache(dataType, fieldMap);
+        return fieldMap;
     }
 
     /**
@@ -71,5 +109,56 @@ public final class ReflectUtil {
             container.setParent(parentContainer);
             getAllFieldsOfClass(clazz.getSuperclass(), parentContainer);
         }
+    }
+
+    public static boolean isNumber(Class clazz) {
+        return clazz == Double.class || clazz == double.class
+                || clazz == Float.class || clazz == float.class
+                || clazz == Long.class || clazz == long.class
+                || clazz == Integer.class || clazz == int.class
+                || clazz == Short.class || clazz == short.class
+                || clazz == Byte.class || clazz == byte.class
+                || clazz == BigDecimal.class;
+    }
+
+    public static boolean isBool(Class clazz) {
+        return clazz == boolean.class || clazz == Boolean.class;
+    }
+
+    public static int sortFields(Field field1, Field field2) {
+        ExcelColumn excelColumn1 = field1.getAnnotation(ExcelColumn.class);
+        ExcelColumn excelColumn2 = field2.getAnnotation(ExcelColumn.class);
+        if (excelColumn1 == null && excelColumn2 == null) {
+            return 0;
+        }
+        int defaultOrder = 0;
+        int order1 = defaultOrder;
+        if (excelColumn1 != null) {
+            order1 = excelColumn1.order();
+        }
+        int order2 = defaultOrder;
+        if (excelColumn2 != null) {
+            order2 = excelColumn2.order();
+        }
+        if (order1 == order2) {
+            return 0;
+        }
+        return order1 > order2 ? 1 : -1;
+    }
+
+    public static boolean isFieldSelected(List<Class<?>> selectedGroupList, Field field) {
+        if (selectedGroupList.isEmpty()) {
+            return true;
+        }
+        ExcelColumn excelColumn = field.getAnnotation(ExcelColumn.class);
+        if (excelColumn == null) {
+            return false;
+        }
+        Class<?>[] groupArr = excelColumn.groups();
+        if (groupArr.length == 0) {
+            return false;
+        }
+        List<Class<?>> reservedGroupList = Arrays.stream(groupArr).collect(Collectors.toList());
+        return reservedGroupList.stream().anyMatch(selectedGroupList::contains);
     }
 }

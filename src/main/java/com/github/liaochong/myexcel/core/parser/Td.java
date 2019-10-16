@@ -15,10 +15,12 @@
  */
 package com.github.liaochong.myexcel.core.parser;
 
+import com.github.liaochong.myexcel.utils.TdUtil;
 import lombok.AccessLevel;
 import lombok.Data;
 import lombok.experimental.FieldDefaults;
 
+import java.io.File;
 import java.util.Map;
 
 /**
@@ -49,20 +51,54 @@ public class Td {
      */
     String content;
     /**
+     * 内容类型
+     */
+    ContentTypeEnum tdContentType = ContentTypeEnum.STRING;
+    /**
      * 是否为th
      */
     boolean th;
     /**
-     * 行边界
-     */
-    int rowBound;
-    /**
-     * 列边界
-     */
-    int colBound;
-    /**
      * 单元格样式
      */
     Map<String, String> style;
+    /**
+     * 公式
+     */
+    boolean formula;
+    /**
+     * 链接
+     */
+    String link;
+    /**
+     * 文件
+     */
+    File file;
 
+    public Td(int row, int col) {
+        this.row = row;
+        this.col = col;
+    }
+
+    public void setRowSpan(int rowSpan) {
+        if (rowSpan < 2) {
+            return;
+        }
+        this.rowSpan = rowSpan;
+    }
+
+    public void setColSpan(int colSpan) {
+        if (colSpan < 2) {
+            return;
+        }
+        this.colSpan = colSpan;
+    }
+
+    public int getRowBound() {
+        return TdUtil.get(this::getRowSpan, this::getRow);
+    }
+
+    public int getColBound() {
+        return TdUtil.get(this::getColSpan, this::getCol);
+    }
 }

@@ -15,12 +15,17 @@
  */
 package com.github.liaochong.myexcel.core;
 
-import com.github.liaochong.myexcel.core.io.TempFileOperator;
 import com.github.liaochong.myexcel.core.strategy.AutoWidthStrategy;
+import com.github.liaochong.myexcel.core.strategy.WidthStrategy;
+import com.github.liaochong.myexcel.exception.ExcelBuildException;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.Workbook;
 
-import java.util.Objects;
+import java.io.IOException;
+import java.io.StringWriter;
+import java.io.Writer;
+import java.util.Map;
 
 /**
  * excel创建者接口
@@ -33,20 +38,12 @@ public abstract class AbstractExcelBuilder implements ExcelBuilder {
 
     protected HtmlToExcelFactory htmlToExcelFactory = new HtmlToExcelFactory();
 
-    protected TempFileOperator tempFileOperator = new TempFileOperator();
-
     @Override
     public AbstractExcelBuilder workbookType(@NonNull WorkbookType workbookType) {
         htmlToExcelFactory.workbookType(workbookType);
         if (WorkbookType.isSxlsx(workbookType)) {
-            autoWidthStrategy(AutoWidthStrategy.NO_AUTO);
+            widthStrategy(WidthStrategy.NO_AUTO);
         }
-        return this;
-    }
-
-    @Override
-    public AbstractExcelBuilder rowAccessWindowSize(int rowAccessWindowSize) {
-        htmlToExcelFactory.rowAccessWindowSize(rowAccessWindowSize);
         return this;
     }
 
@@ -57,14 +54,21 @@ public abstract class AbstractExcelBuilder implements ExcelBuilder {
     }
 
     @Override
+    public AbstractExcelBuilder widthStrategy(@NonNull WidthStrategy widthStrategy) {
+        htmlToExcelFactory.widthStrategy(widthStrategy);
+        return this;
+    }
+
+    @Deprecated
+    @Override
     public AbstractExcelBuilder autoWidthStrategy(@NonNull AutoWidthStrategy autoWidthStrategy) {
-        htmlToExcelFactory.autoWidthStrategy(autoWidthStrategy);
+        htmlToExcelFactory.widthStrategy(AutoWidthStrategy.map(autoWidthStrategy));
         return this;
     }
 
     @Override
     public AbstractExcelBuilder freezePanes(FreezePane... freezePanes) {
-        if (Objects.isNull(freezePanes) || freezePanes.length == 0) {
+        if (freezePanes == null || freezePanes.length == 0) {
             return this;
         }
         htmlToExcelFactory.freezePanes(freezePanes);
@@ -72,25 +76,35 @@ public abstract class AbstractExcelBuilder implements ExcelBuilder {
     }
 
     /**
-     * 分离文件路径
+     * 构建
      *
-     * @param path 文件路径
-     * @return String[]
+     * @param data 模板参数
+     * @return Workbook
      */
-    String[] splitFilePath(String path) {
-        if (Objects.isNull(path) || path.isEmpty()) {
-            throw new NullPointerException();
+    @Override
+    public <T> Workbook build(Map<String, T> data) {
+        try (Writer out = new StringWriter()) {
+            render(data, out);
+            return HtmlToExcelFactory.readHtml(out.toString(), htmlToExcelFactory).build();
+        } catch (Exception e) {
+            throw ExcelBuildException.of("Failed to build excel", e);
         }
-        int lastPackageIndex = path.lastIndexOf("/");
-        if (lastPackageIndex == -1) {
-            return new String[]{"/", path};
-        }
-        if (lastPackageIndex == path.length() - 1) {
-            throw new IllegalArgumentException();
-        }
-        String basePackagePath = path.substring(0, lastPackageIndex);
-        String templateName = path.substring(lastPackageIndex + 1);
-        return new String[]{basePackagePath, templateName};
     }
 
+    /**
+     * 模板引擎渲染
+     *
+     * @param renderData 渲染数据
+     * @param out        输出流，who create who close;
+     * @param <T>        被渲染数据类型
+     * @throws Exception 异常
+     */
+    protected abstract <T> void render(Map<String, T> renderData, Writer out) throws Exception;
+
+    @Override
+    public void close() throws IOException {
+        if (htmlToExcelFactory != null) {
+            htmlToExcelFactory.closeWorkbook();
+        }
+    }
 }

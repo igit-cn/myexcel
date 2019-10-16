@@ -17,8 +17,11 @@ package com.github.liaochong.myexcel.core;
 
 import org.apache.poi.ss.usermodel.Workbook;
 
+import java.io.Closeable;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.function.Consumer;
 
 /**
  * 简单的流式excel构建器
@@ -26,7 +29,7 @@ import java.util.concurrent.ExecutorService;
  * @author liaochong
  * @version 1.0
  */
-interface SimpleStreamExcelBuilder {
+interface SimpleStreamExcelBuilder extends Closeable {
 
     /**
      * 线程池设置
@@ -39,11 +42,9 @@ interface SimpleStreamExcelBuilder {
     /**
      * 流式构建启动，包含一些初始化操作
      *
-     * @param waitQueueSize 等待队列容量
-     * @param groups        分组
      * @return SimpleStreamExcelBuilder
      */
-    SimpleStreamExcelBuilder start(int waitQueueSize, Class<?>... groups);
+    SimpleStreamExcelBuilder start();
 
     /**
      * 使用默认样式
@@ -53,6 +54,30 @@ interface SimpleStreamExcelBuilder {
     SimpleStreamExcelBuilder hasStyle();
 
     /**
+     * excel容量
+     *
+     * @param capacity 容量
+     * @return SimpleStreamExcelBuilder
+     */
+    SimpleStreamExcelBuilder capacity(int capacity);
+
+    /**
+     * path消费
+     *
+     * @param pathConsumer pathConsumer
+     * @return SimpleStreamExcelBuilder
+     */
+    SimpleStreamExcelBuilder pathConsumer(Consumer<Path> pathConsumer);
+
+    /**
+     * 分组
+     *
+     * @param groups 分组
+     * @return SimpleStreamExcelBuilder
+     */
+    SimpleStreamExcelBuilder groups(Class<?>... groups);
+
+    /**
      * 数据追加
      *
      * @param data 需要追加的数据
@@ -60,9 +85,32 @@ interface SimpleStreamExcelBuilder {
     void append(List<?> data);
 
     /**
+     * 数据追加
+     *
+     * @param data 数据
+     * @param <T>  数据类型
+     */
+    <T> void append(T data);
+
+    /**
      * 停止追加数据，开始构建
      *
      * @return Workbook
      */
     Workbook build();
+
+    /**
+     * 停止追加数据，path方式构建
+     *
+     * @return path集合
+     */
+    List<Path> buildAsPaths();
+
+    /**
+     * 构建为zip压缩包
+     *
+     * @param fileName 文件名称
+     * @return zip文件
+     */
+    Path buildAsZip(String fileName);
 }

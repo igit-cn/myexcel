@@ -15,6 +15,9 @@
  */
 package com.github.liaochong.myexcel.core.annotation;
 
+import com.github.liaochong.myexcel.core.constant.FileType;
+import com.github.liaochong.myexcel.core.constant.LinkType;
+
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -77,4 +80,46 @@ public @interface ExcelColumn {
      * @return 宽度
      */
     int width() default -1;
+
+    /**
+     * 是否强制转换成字符串
+     *
+     * @return 是否强制转换成字符串
+     */
+    boolean convertToString() default false;
+
+    /**
+     * 小数格式化
+     *
+     * @return 格式化
+     */
+    String decimalFormat() default "";
+
+    /**
+     * 样式
+     *
+     * @return 样式集合
+     */
+    String[] style() default {};
+
+    /**
+     * 链接
+     *
+     * @return linkType
+     */
+    LinkType linkType() default LinkType.NONE;
+
+    /**
+     * 简单映射，如"1:男,2:女"
+     *
+     * @return String
+     */
+    String mapping() default "";
+
+    /**
+     * 文件类型
+     *
+     * @return 文件类型
+     */
+    FileType fileType() default FileType.NONE;
 }

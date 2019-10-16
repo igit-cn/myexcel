@@ -15,6 +15,8 @@
  */
 package com.github.liaochong.myexcel.core.parser;
 
+import com.github.liaochong.myexcel.core.constant.Constants;
+import com.github.liaochong.myexcel.utils.StringUtil;
 import com.github.liaochong.myexcel.utils.StyleUtil;
 import com.github.liaochong.myexcel.utils.TdUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -45,6 +48,8 @@ import java.util.stream.IntStream;
  */
 @Slf4j
 public class HtmlTableParser {
+
+    private static final Pattern DOUBLE_PATTERN = Pattern.compile("^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE]([-+]?([012]?\\d{1,2}|30[0-7])|-3([01]?[4-9]|[012]?[0-3])))?[dD]?$");
 
     private ParseConfig parseConfig;
 
@@ -81,7 +86,7 @@ public class HtmlTableParser {
         log.info("Start parsing html file");
         long startTime = System.currentTimeMillis();
         Document document;
-        if (Objects.nonNull(htmlFile)) {
+        if (htmlFile != null) {
             document = Jsoup.parse(htmlFile, CharEncoding.UTF_8);
         } else {
             document = Jsoup.parse(html, CharEncoding.UTF_8);
@@ -125,10 +130,14 @@ public class HtmlTableParser {
                     parentStyleMap.putIfAbsent(parent, upperStyle);
                 }
             }
-            Tr tr = new Tr(index);
-            this.parseTdOfTr(tr, trElement, StyleUtil.mixStyle(upperStyle, StyleUtil.parseStyle(trElement)), seizeMap);
+            Map<String, String> trStyleMap = StyleUtil.mixStyle(upperStyle, StyleUtil.parseStyle(trElement));
+            String height = trStyleMap.get("height");
+            Tr tr = new Tr(index, TdUtil.getValue(height));
+            // 行可见性
+            tr.setVisibility(!Objects.equals(trStyleMap.get("visibility"), "hidden"));
+            this.parseTdOfTr(tr, trElement, trStyleMap, seizeMap);
             return tr;
-        }).collect(Collectors.toList());
+        }).collect(Collectors.toCollection(LinkedList::new));
         table.setTrList(trList);
     }
 
@@ -155,13 +164,11 @@ public class HtmlTableParser {
         int shift = 0;
         for (int i = 0, size = tdElements.size(); i < size; i++) {
             Element tdElement = tdElements.get(i);
-            Td td = new Td();
-            td.setContent(tdElement.text());
+            Td td = new Td(tr.getIndex(), i + shift);
+            this.setTdContent(tdElement, td);
+
             td.setTh(Objects.equals(TableTag.th.name(), tdElement.tagName()));
-            td.setRow(tr.getIndex());
             td.setStyle(StyleUtil.mixStyle(trStyle, StyleUtil.parseStyle(tdElement)));
-            // 除每行第一个单元格外，修正含跨列的单元格位置
-            td.setCol(i + shift);
 
             String colSpan = tdElement.attr(TableTag.colspan.name());
             td.setColSpan(TdUtil.getSpan(colSpan));
@@ -184,12 +191,6 @@ public class HtmlTableParser {
                 }
             }
 
-            int rowBound = TdUtil.get(td::getRowSpan, td::getRow);
-            td.setRowBound(rowBound);
-
-            int colBound = TdUtil.get(td::getColSpan, td::getCol);
-            td.setColBound(colBound);
-
             if (td.getRowSpan() > 1) {
                 for (int j = 1, length = td.getRowSpan(); j < length; j++) {
                     int rowNum = tr.getIndex() + j;
@@ -210,11 +211,22 @@ public class HtmlTableParser {
             // 设置每列宽度
             if (parseConfig.isComputeAutoWidth()) {
                 int width = TdUtil.getStringWidth(td.getContent());
-                colWidthMap.put(td.getCol(), width);
+                if (td.getColSpan() > 1) {
+                    int realWidth = (int) Math.ceil(width * 1.0 / td.getColSpan());
+                    for (int j = 0, span = td.getColSpan(); j < span; j++) {
+                        int colIndex = td.getCol() + j;
+                        Integer colWidth = colWidthMap.get(colIndex);
+                        if (colWidth == null || colWidth < realWidth) {
+                            colWidthMap.put(colIndex, realWidth);
+                        }
+                    }
+                } else {
+                    colWidthMap.put(td.getCol(), width);
+                }
             } else if (parseConfig.isCustomWidth()) {
                 String widthStr = td.getStyle().get("width");
-                if (Objects.nonNull(widthStr)) {
-                    Integer width = Integer.valueOf(widthStr.replaceAll("\\D*", ""));
+                if (widthStr != null) {
+                    int width = TdUtil.getValue(widthStr);
                     if (width > 0) {
                         colWidthMap.put(td.getCol(), width);
                     }
@@ -223,6 +235,47 @@ public class HtmlTableParser {
         }
         tr.setTdList(tdList);
         tr.setColWidthMap(colWidthMap);
+    }
+
+    private void setTdContent(Element tdElement, Td td) {
+        String tdContent = tdElement.text();
+        td.setContent(tdContent);
+        if (StringUtil.isBlank(tdContent)) {
+            return;
+        }
+        if (tdElement.hasAttr("string")) {
+            return;
+        }
+        // 公式设置
+        boolean isFormula = tdElement.hasAttr("formula");
+        if (isFormula) {
+            td.setFormula(true);
+            return;
+        }
+        if (tdElement.hasAttr("url")) {
+            String link = tdElement.attr("url");
+            td.setTdContentType(ContentTypeEnum.LINK_URL);
+            td.setLink(link);
+            return;
+        }
+        if (tdElement.hasAttr("email")) {
+            String link = tdElement.attr("email");
+            td.setTdContentType(ContentTypeEnum.LINK_EMAIL);
+            td.setLink(link);
+            return;
+        }
+        if (tdElement.hasAttr("dropDownList")) {
+            td.setTdContentType(ContentTypeEnum.DROP_DOWN_LIST);
+            return;
+        }
+        if (Constants.TRUE.equals(tdContent) || Constants.FALSE.equals(tdContent)) {
+            td.setTdContentType(ContentTypeEnum.BOOLEAN);
+            return;
+        }
+        if (DOUBLE_PATTERN.matcher(tdContent).matches()) {
+            td.setTdContentType(ContentTypeEnum.DOUBLE);
+            return;
+        }
     }
 
     public enum TableTag {
@@ -261,6 +314,10 @@ public class HtmlTableParser {
         /**
          * rowspan
          */
-        rowspan;
+        rowspan,
+        /**
+         * link
+         */
+        link;
     }
 }

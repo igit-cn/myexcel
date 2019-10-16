@@ -18,7 +18,10 @@ package com.github.liaochong.myexcel.core;
 import com.github.liaochong.myexcel.core.parser.HtmlTableParser;
 import com.github.liaochong.myexcel.core.parser.ParseConfig;
 import com.github.liaochong.myexcel.core.parser.Table;
+import com.github.liaochong.myexcel.core.parser.Td;
 import com.github.liaochong.myexcel.core.parser.Tr;
+import com.github.liaochong.myexcel.core.strategy.WidthStrategy;
+import com.github.liaochong.myexcel.utils.StringUtil;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -94,6 +97,25 @@ public class HtmlToExcelFactory extends AbstractExcelFactory {
     }
 
     /**
+     * 读取html
+     *
+     * @param html               html内容
+     * @param htmlToExcelFactory 实例对象
+     * @return HtmlToExcelFactory
+     * @throws Exception 解析异常
+     */
+    public static HtmlToExcelFactory readHtml(String html, HtmlToExcelFactory htmlToExcelFactory) throws Exception {
+        if (StringUtil.isBlank(html)) {
+            throw new IllegalArgumentException("Html content is empty");
+        }
+        if (Objects.isNull(htmlToExcelFactory)) {
+            throw new NullPointerException("HtmlToExcelFactory can not be null");
+        }
+        htmlToExcelFactory.htmlTableParser = HtmlTableParser.of(html);
+        return htmlToExcelFactory;
+    }
+
+    /**
      * 开始构建
      *
      * @return Workbook
@@ -102,9 +124,10 @@ public class HtmlToExcelFactory extends AbstractExcelFactory {
     public Workbook build() {
         try {
             ParseConfig parseConfig = new ParseConfig();
-            parseConfig.setAutoWidthStrategy(autoWidthStrategy);
+            parseConfig.setWidthStrategy(widthStrategy);
 
             List<Table> tables = htmlTableParser.getAllTable(parseConfig);
+            htmlTableParser = null;
             return this.build(tables);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -146,9 +169,11 @@ public class HtmlToExcelFactory extends AbstractExcelFactory {
         // 2、处理解析表格
         for (int i = 0, size = tables.size(); i < size; i++) {
             Table table = tables.get(i);
-            String sheetName = Objects.isNull(table.getCaption()) || table.getCaption().length() < 1 ? "Sheet" + (i + 1) : table.getCaption();
-            Sheet sheet = workbook.createSheet(sheetName);
-
+            String sheetName = this.getRealSheetName(table.getCaption());
+            Sheet sheet = workbook.getSheet(sheetName);
+            if (sheet == null) {
+                sheet = workbook.createSheet(sheetName);
+            }
             boolean hasTd = table.getTrList().stream().map(Tr::getTdList).anyMatch(list -> !list.isEmpty());
             if (!hasTd) {
                 continue;
@@ -156,6 +181,8 @@ public class HtmlToExcelFactory extends AbstractExcelFactory {
             // 设置单元格样式
             this.setTdOfTable(table, sheet);
             this.freezePane(i, sheet);
+            // 移除table
+            tables.set(i, null);
         }
         log.info("Build excel takes {} ms", System.currentTimeMillis() - startTime);
         return workbook;
@@ -165,12 +192,21 @@ public class HtmlToExcelFactory extends AbstractExcelFactory {
      * 设置所有单元格，自适应列宽，单元格最大支持字符长度255
      */
     private void setTdOfTable(Table table, Sheet sheet) {
+        int maxColIndex = 0;
+        if (WidthStrategy.isAutoWidth(widthStrategy) && !table.getTrList().isEmpty()) {
+            maxColIndex = table.getTrList().parallelStream()
+                    .mapToInt(tr -> tr.getTdList().stream().mapToInt(Td::getCol).max().orElse(0))
+                    .max()
+                    .orElse(0);
+        }
         Map<Integer, Integer> colMaxWidthMap = this.getColMaxWidthMap(table.getTrList());
         for (int i = 0, size = table.getTrList().size(); i < size; i++) {
-            this.createRow(table.getTrList().get(i), sheet);
-            table.getTrList().set(i, null);
+            Tr tr = table.getTrList().get(i);
+            this.createRow(tr, sheet);
+            tr.setTdList(null);
         }
-        this.setColWidth(colMaxWidthMap, sheet);
+        table.setTrList(null);
+        this.setColWidth(colMaxWidthMap, sheet, maxColIndex);
     }
 
 }
