@@ -12,19 +12,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.liaochong.myexcel.exception;
+package com.github.liaochong.myexcel.core;
+
+import lombok.AccessLevel;
+import lombok.Data;
+import lombok.experimental.FieldDefaults;
 
 /**
+ * excel单元格
+ *
  * @author liaochong
  * @version 1.0
  */
-public class ExcelReadException extends RuntimeException {
+@Data
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class Cell {
 
-    public ExcelReadException(String message, Throwable cause) {
-        super(message, cause);
-    }
+    int rowNum;
 
-    public ExcelReadException(String message) {
-        super(message);
+    int colNum;
+
+    public Cell(int rowNum, int colNum) {
+        this.rowNum = rowNum;
+        this.colNum = colNum;
     }
 }

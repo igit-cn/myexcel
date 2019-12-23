@@ -12,19 +12,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.liaochong.myexcel.exception;
+package com.github.liaochong.myexcel.core.pojo;
+
+import lombok.AccessLevel;
+import lombok.Data;
+import lombok.experimental.FieldDefaults;
 
 /**
  * @author liaochong
  * @version 1.0
  */
-public class ExcelReadException extends RuntimeException {
+@Data
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class Product {
 
-    public ExcelReadException(String message, Throwable cause) {
-        super(message, cause);
-    }
+    String category;
 
-    public ExcelReadException(String message) {
-        super(message);
-    }
+    String name;
+
+    Integer count;
 }

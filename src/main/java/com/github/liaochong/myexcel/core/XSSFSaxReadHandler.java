@@ -14,7 +14,6 @@
  */
 package com.github.liaochong.myexcel.core;
 
-import com.github.liaochong.myexcel.core.converter.ReadConverterContext;
 import com.github.liaochong.myexcel.exception.StopReadException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.util.CellReference;
@@ -24,10 +23,6 @@ import org.apache.poi.xssf.usermodel.XSSFComment;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Predicate;
 
 /**
  * sax处理
@@ -36,56 +31,27 @@ import java.util.function.Predicate;
  * @version 1.0
  */
 @Slf4j
-class SaxHandler<T> implements XSSFSheetXMLHandler.SheetContentsHandler {
-
-    private final Map<Integer, Field> fieldMap;
-
-    private List<T> result;
-
-    private T obj;
-
-    private Class<T> dataType;
-
-    private Consumer<T> consumer;
-
-    private Function<T, Boolean> function;
-
-    private Predicate<Row> rowFilter;
-
-    private Predicate<T> beanFilter;
+class XSSFSaxReadHandler<T> extends AbstractReadHandler<T> implements XSSFSheetXMLHandler.SheetContentsHandler {
 
     private Row currentRow;
 
     private int count;
 
-    private BiFunction<Throwable, ReadContext, Boolean> exceptionFunction;
-
-    public SaxHandler(
-            Map<Integer, Field> fieldMap,
+    public XSSFSaxReadHandler(
             List<T> result,
             SaxExcelReader.ReadConfig<T> readConfig) {
-        this.fieldMap = fieldMap;
-        this.result = result;
-        this.dataType = readConfig.getDataType();
-        this.consumer = readConfig.getConsumer();
-        this.function = readConfig.getFunction();
-        this.rowFilter = readConfig.getRowFilter();
-        this.beanFilter = readConfig.getBeanFilter();
-        this.exceptionFunction = readConfig.getExceptionFunction();
+        this.init(result, readConfig);
     }
 
     @Override
     public void startRow(int rowNum) {
         currentRow = new Row(rowNum);
-        try {
-            obj = dataType.newInstance();
-        } catch (InstantiationException | IllegalAccessException e) {
-            throw new RuntimeException(e);
-        }
+        obj = this.newInstance(dataType);
     }
 
     @Override
     public void endRow(int rowNum) {
+        this.initFieldMap(rowNum);
         if (!rowFilter.test(currentRow)) {
             return;
         }
@@ -105,22 +71,25 @@ class SaxHandler<T> implements XSSFSheetXMLHandler.SheetContentsHandler {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void cell(String cellReference, String formattedValue,
                      XSSFComment comment) {
-        if (!rowFilter.test(currentRow)) {
-            return;
-        }
         if (cellReference == null) {
             return;
         }
         int thisCol = (new CellReference(cellReference)).getCol();
-        Field field = fieldMap.get(thisCol);
-        if (field == null) {
+        formattedValue = readConfig.getTrim().apply(formattedValue);
+        this.addTitleConsumer.accept(formattedValue, currentRow.getRowNum(), thisCol);
+        if (!rowFilter.test(currentRow)) {
             return;
         }
-        ReadContext context = new ReadContext(field, formattedValue, currentRow.getRowNum(), thisCol);
-        ReadConverterContext.convert(obj, context, exceptionFunction);
+        if (isMapType) {
+            ((Map<Cell, String>) obj).put(new Cell(currentRow.getRowNum(), thisCol), formattedValue);
+            return;
+        }
+        Field field = fieldMap.get(thisCol);
+        convert(formattedValue, currentRow.getRowNum(), thisCol, field);
     }
 
     @Override

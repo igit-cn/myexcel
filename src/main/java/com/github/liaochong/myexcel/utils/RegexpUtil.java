@@ -12,19 +12,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.liaochong.myexcel.exception;
+package com.github.liaochong.myexcel.utils;
+
+import java.util.regex.Pattern;
 
 /**
  * @author liaochong
  * @version 1.0
  */
-public class ExcelReadException extends RuntimeException {
+public final class RegexpUtil {
 
-    public ExcelReadException(String message, Throwable cause) {
-        super(message, cause);
-    }
+    private static final Pattern PATTERN_COMMA = Pattern.compile(",");
 
-    public ExcelReadException(String message) {
-        super(message);
+    public static String removeComma(String content) {
+        if (content == null) {
+            return content;
+        }
+        return PATTERN_COMMA.matcher(content).replaceAll("");
     }
 }

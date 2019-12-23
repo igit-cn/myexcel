@@ -16,6 +16,7 @@
 package com.github.liaochong.myexcel.core.parser;
 
 import com.github.liaochong.myexcel.core.constant.Constants;
+import com.github.liaochong.myexcel.utils.RegexpUtil;
 import com.github.liaochong.myexcel.utils.StringUtil;
 import com.github.liaochong.myexcel.utils.StyleUtil;
 import com.github.liaochong.myexcel.utils.TdUtil;
@@ -50,6 +51,8 @@ import java.util.stream.IntStream;
 public class HtmlTableParser {
 
     private static final Pattern DOUBLE_PATTERN = Pattern.compile("^[-+]?(\\d+(\\.\\d*)?|\\.\\d+)([eE]([-+]?([012]?\\d{1,2}|30[0-7])|-3([01]?[4-9]|[012]?[0-3])))?[dD]?$");
+
+    private static final Pattern LINE_FEED_PATTERN = Pattern.compile("\\\\n");
 
     private ParseConfig parseConfig;
 
@@ -91,6 +94,11 @@ public class HtmlTableParser {
         } else {
             document = Jsoup.parse(html, CharEncoding.UTF_8);
         }
+        document.outputSettings(new Document.OutputSettings().prettyPrint(false));
+        //select all <br> tags and append \n after that
+        document.select("br").after("\\n");
+        //select all <p> tags and prepend \n before that
+        document.select("p").before("\\n");
         this.parseConfig = parseConfig;
         Elements tableElements = document.getElementsByTag(TableTag.table.name());
         List<Table> result = tableElements.stream().map(tableElement -> {
@@ -238,12 +246,24 @@ public class HtmlTableParser {
     }
 
     private void setTdContent(Element tdElement, Td td) {
-        String tdContent = tdElement.text();
+        Elements imgs = tdElement.getElementsByTag(TableTag.img.name());
+        if (imgs != null && !imgs.isEmpty()) {
+            String src = imgs.get(0).attr("src");
+            td.setFile(new File(src));
+            td.setTdContentType(ContentTypeEnum.IMAGE);
+            return;
+        }
+        String tdContent = LINE_FEED_PATTERN.matcher(tdElement.text()).replaceAll("\n");
         td.setContent(tdContent);
         if (StringUtil.isBlank(tdContent)) {
             return;
         }
         if (tdElement.hasAttr("string")) {
+            return;
+        }
+        if (tdElement.hasAttr("double")) {
+            td.setTdContentType(ContentTypeEnum.DOUBLE);
+            td.setContent(RegexpUtil.removeComma(td.getContent()));
             return;
         }
         // 公式设置
@@ -318,6 +338,10 @@ public class HtmlTableParser {
         /**
          * link
          */
-        link;
+        link,
+        /**
+         * img
+         */
+        img;
     }
 }

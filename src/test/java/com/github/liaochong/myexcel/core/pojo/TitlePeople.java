@@ -12,41 +12,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.liaochong.myexcel.core;
+package com.github.liaochong.myexcel.core.pojo;
 
+import com.github.liaochong.myexcel.core.annotation.ExcelColumn;
+import com.github.liaochong.myexcel.core.annotation.ExcelTable;
 import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
 import lombok.experimental.FieldDefaults;
 
-import java.lang.reflect.Field;
+import java.math.BigDecimal;
+import java.util.Date;
 
 /**
- * 读取异常上下文
- *
  * @author liaochong
  * @version 1.0
  */
-@Getter
-@Setter
+@Data
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class ReadContext<T> {
+@ExcelTable(sheetName = "人员信息")
+public class TitlePeople {
+    @ExcelColumn(title = "姓名")
+    String name;
 
-    T object;
+    @ExcelColumn(title = "年龄")
+    Integer age;
 
-    Field field;
+    @ExcelColumn(title = "是否会跳舞", groups = CommonPeople.class)
+    boolean dance;
 
-    String val;
+    @ExcelColumn(title = "金钱", decimalFormat = "#,000.00")
+    BigDecimal money;
 
-    int rowNum;
-
-    int colNum;
-
-    public void reset(T object, Field field, String val, int rowNum, int colNum) {
-        this.object = object;
-        this.field = field;
-        this.val = val;
-        this.rowNum = rowNum;
-        this.colNum = colNum;
-    }
+    @ExcelColumn(title = "生日", dateFormatPattern = "yyyy-MM-dd HH:mm:ss")
+    Date birthday;
 }

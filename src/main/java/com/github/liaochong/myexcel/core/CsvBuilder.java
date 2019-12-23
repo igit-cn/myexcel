@@ -27,6 +27,7 @@ import com.github.liaochong.myexcel.utils.ReflectUtil;
 import com.github.liaochong.myexcel.utils.StringUtil;
 import com.github.liaochong.myexcel.utils.TempFileOperator;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -53,9 +54,9 @@ import java.util.stream.IntStream;
  * @author liaochong
  * @version 1.0
  */
-public class CsvBuilder<T> {
+public class CsvBuilder<T> implements Closeable {
 
-    private static final Pattern PATTERN_COMMA = Pattern.compile(",+");
+    private static final Pattern PATTERN_QUOTES_PREMISE = Pattern.compile("[,\"]+");
 
     private static final Pattern PATTERN_QUOTES = Pattern.compile("\"");
 
@@ -257,11 +258,11 @@ public class CsvBuilder<T> {
         List<String> content = data.stream().map(d -> {
             return d.stream().map(v -> {
                 if (v == null) {
-                    return "\"\"";
+                    return "";
                 }
                 String vStr = v.toString();
                 vStr = PATTERN_QUOTES.matcher(vStr).replaceAll("\"\"");
-                boolean hasComma = PATTERN_COMMA.matcher(v.toString()).find();
+                boolean hasComma = PATTERN_QUOTES_PREMISE.matcher(v.toString()).find();
                 if (hasComma) {
                     vStr = "\"" + vStr + "\"";
                 }
@@ -273,6 +274,17 @@ public class CsvBuilder<T> {
             Files.write(csv.getFilePath(), content, StandardCharsets.UTF_8, StandardOpenOption.APPEND);
         } catch (IOException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void close() throws IOException {
+        clear();
+    }
+
+    public void clear() {
+        if (csv != null) {
+            csv.clear();
         }
     }
 }
