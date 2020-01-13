@@ -11,7 +11,7 @@
 
     <groupId>com.github.liaochong</groupId>
     <artifactId>myexcel</artifactId>
-    <version>3.3.0.RELEASE</version>
+    <version>3.3.2</version>
     <packaging>jar</packaging>
 
     <name>myexcel</name>
@@ -27,9 +27,11 @@
         <lombok.version>1.18.10</lombok.version>
         <slf4j-api.version>1.7.26</slf4j-api.version>
         <beetl.version>2.9.9</beetl.version>
+        <velocity.version>1.7</velocity.version>
         <freemarker.version>2.3.23</freemarker.version>
         <groovy-templates.version>2.4.13</groovy-templates.version>
         <thymeleaf.version>2.1.6.RELEASE</thymeleaf.version>
+        <enjoy.version>4.8</enjoy.version>
         <javax.servlet-api.version>4.0.1</javax.servlet-api.version>
     </properties>
 
@@ -68,6 +70,12 @@
             <optional>true</optional>
         </dependency>
         <dependency>
+            <groupId>org.apache.velocity</groupId>
+            <artifactId>velocity</artifactId>
+            <version>${velocity.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
             <groupId>org.thymeleaf</groupId>
             <artifactId>thymeleaf</artifactId>
             <version>${thymeleaf.version}</version>
@@ -77,6 +85,12 @@
             <groupId>org.codehaus.groovy</groupId>
             <artifactId>groovy-templates</artifactId>
             <version>${groovy-templates.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>com.jfinal</groupId>
+            <artifactId>enjoy</artifactId>
+            <version>${enjoy.version}</version>
             <optional>true</optional>
         </dependency>
         <dependency>

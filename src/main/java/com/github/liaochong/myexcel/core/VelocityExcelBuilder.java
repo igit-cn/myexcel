@@ -15,31 +15,30 @@
  */
 package com.github.liaochong.myexcel.core;
 
-import com.github.liaochong.myexcel.exception.ExcelBuildException;
-import freemarker.template.Configuration;
-import freemarker.template.Template;
-import freemarker.template.TemplateExceptionHandler;
 import org.apache.commons.codec.CharEncoding;
+import org.apache.velocity.Template;
+import org.apache.velocity.VelocityContext;
+import org.apache.velocity.app.Velocity;
+import org.apache.velocity.runtime.resource.loader.ClasspathResourceLoader;
 
-import java.io.IOException;
 import java.io.Writer;
 import java.util.Map;
 
 /**
- * freemarker的excel创建者
+ * velocity的excel创建者
  *
- * @author liaochong
+ * @author gaokai
  * @version 1.0
  */
-public class FreemarkerExcelBuilder extends AbstractExcelBuilder {
-
-    private static final Configuration CFG;
+public class VelocityExcelBuilder extends AbstractExcelBuilder {
 
     static {
-        CFG = new Configuration(Configuration.VERSION_2_3_23);
-        CFG.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW_HANDLER);
-        CFG.setDefaultEncoding(CharEncoding.UTF_8);
-        CFG.setClassLoaderForTemplateLoading(Thread.currentThread().getContextClassLoader(), "/");
+        Velocity.setProperty(Velocity.RESOURCE_LOADER, "classpath");
+        Velocity.setProperty("classpath.resource.loader.class", ClasspathResourceLoader.class.getName());
+        Velocity.setProperty(Velocity.ENCODING_DEFAULT, CharEncoding.UTF_8);
+        Velocity.setProperty(Velocity.INPUT_ENCODING, CharEncoding.UTF_8);
+        Velocity.setProperty(Velocity.OUTPUT_ENCODING, CharEncoding.UTF_8);
+        Velocity.init();
     }
 
     private Template template;
@@ -51,18 +50,14 @@ public class FreemarkerExcelBuilder extends AbstractExcelBuilder {
      */
     @Override
     public ExcelBuilder template(String path) {
-        try {
-            template = CFG.getTemplate(path);
-            return this;
-        } catch (IOException e) {
-            throw ExcelBuildException.of("Failed to get freemarker template", e);
-        }
+        template = Velocity.getTemplate(path);
+        return this;
     }
 
     @Override
     protected <T> void render(Map<String, T> data, Writer out) throws Exception {
         checkTemplate(template);
-        template.process(data, out);
+        VelocityContext context = new VelocityContext(data);
+        template.merge(context, out);
     }
-
 }
