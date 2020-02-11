@@ -12,30 +12,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.liaochong.myexcel.core.converter.reader;
+package com.github.liaochong.myexcel.core.converter.writer;
 
 import com.github.liaochong.myexcel.core.ConvertContext;
-import com.github.liaochong.myexcel.core.constant.Constants;
+import com.github.liaochong.myexcel.core.container.Pair;
+import com.github.liaochong.myexcel.core.converter.WriteConverter;
 
 import java.lang.reflect.Field;
-import java.util.Objects;
 
 /**
- * 布尔转换器
+ * 原始类型转换器
  *
  * @author liaochong
  * @version 1.0
  */
-public class BoolReadConverter extends AbstractReadConverter<Boolean> {
+public class OriginalWriteConverter implements WriteConverter {
 
     @Override
-    public Boolean doConvert(String v, Field field, ConvertContext convertContext) {
-        if (Objects.equals(Constants.ONE, v) || v.equalsIgnoreCase(Constants.TRUE)) {
-            return Boolean.TRUE;
-        }
-        if (Objects.equals(Constants.ZERO, v) || v.equalsIgnoreCase(Constants.FALSE)) {
-            return Boolean.FALSE;
-        }
-        throw new IllegalStateException("Cell content does not match the type of field to be injected,field is " + field.getName() + ",value is \"" + v + "\"");
+    public Pair<Class, Object> convert(Field field, Object fieldVal, ConvertContext convertContext) {
+        return Pair.of(field.getType(), fieldVal);
+    }
+
+    @Override
+    public boolean support(Field field, Object fieldVal, ConvertContext convertContext) {
+        return true;
     }
 }
