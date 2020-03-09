@@ -29,7 +29,6 @@ import org.apache.poi.ss.usermodel.Workbook;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -91,8 +90,6 @@ public class DefaultStreamExcelBuilder<T> extends AbstractSimpleExcelBuilder imp
         super(false);
         this.dataType = dataType;
         this.workbook = workbook;
-        this.noStyle = true;
-        globalSetting.setWorkbookType(WorkbookType.SXLSX);
         globalSetting.setWidthStrategy(WidthStrategy.NO_AUTO);
         this.isMapBuild = dataType == Map.class;
     }
@@ -149,7 +146,6 @@ public class DefaultStreamExcelBuilder<T> extends AbstractSimpleExcelBuilder imp
     }
 
     public DefaultStreamExcelBuilder<T> sheetName(@NonNull String sheetName) {
-        globalSetting.setFixedSheetName(true);
         globalSetting.setSheetName(sheetName);
         return this;
     }
@@ -163,7 +159,6 @@ public class DefaultStreamExcelBuilder<T> extends AbstractSimpleExcelBuilder imp
         if (workbook != null) {
             throw new IllegalArgumentException("Workbook type confirmed, not modifiable");
         }
-        globalSetting.setFixedWorkbookType(true);
         globalSetting.setWorkbookType(workbookType);
         return this;
     }
@@ -174,7 +169,7 @@ public class DefaultStreamExcelBuilder<T> extends AbstractSimpleExcelBuilder imp
      * @return DefaultStreamExcelBuilder
      */
     public DefaultStreamExcelBuilder<T> noStyle() {
-        this.noStyle = true;
+        this.styleParser.setNoStyle(true);
         return this;
     }
 
@@ -195,14 +190,21 @@ public class DefaultStreamExcelBuilder<T> extends AbstractSimpleExcelBuilder imp
     }
 
     public DefaultStreamExcelBuilder<T> widths(int... widths) {
-        if (widths.length == 0) {
-            return this;
+        for (int i = 0; i < widths.length; i++) {
+            customWidthMap.put(i, widths[i]);
         }
-        this.widths = new HashMap<>(widths.length);
-        for (int i = 0, size = widths.length; i < size; i++) {
-            this.widths.put(i, widths[i]);
+        return this;
+    }
+
+    public DefaultStreamExcelBuilder<T> width(int columnIndex, int width) {
+        customWidthMap.put(columnIndex, width);
+        return this;
+    }
+
+    public DefaultStreamExcelBuilder<T> hideColumns(int... columnIndexs) {
+        for (int columnIndex : columnIndexs) {
+            width(columnIndex, 0);
         }
-        customWidthMap = this.widths;
         return this;
     }
 
@@ -214,7 +216,7 @@ public class DefaultStreamExcelBuilder<T> extends AbstractSimpleExcelBuilder imp
 
     @Override
     public DefaultStreamExcelBuilder<T> hasStyle() {
-        this.noStyle = false;
+        this.styleParser.setNoStyle(false);
         return this;
     }
 
@@ -244,10 +246,14 @@ public class DefaultStreamExcelBuilder<T> extends AbstractSimpleExcelBuilder imp
         return this;
     }
 
+    @Deprecated
     public DefaultStreamExcelBuilder<T> globalStyle(String... styles) {
-        this.noStyle = false;
-        globalSetting.setFixedGlobalStyle(true);
-        globalSetting.setGlobalStyle(Arrays.stream(styles).collect(Collectors.toSet()));
+        return style(styles);
+    }
+
+    public DefaultStreamExcelBuilder<T> style(String... styles) {
+        this.styleParser.setNoStyle(false);
+        globalSetting.setStyle(Arrays.stream(styles).collect(Collectors.toSet()));
         return this;
     }
 
@@ -258,17 +264,17 @@ public class DefaultStreamExcelBuilder<T> extends AbstractSimpleExcelBuilder imp
      */
     @Override
     public DefaultStreamExcelBuilder<T> start() {
-        if (!isMapBuild) {
+        if (isMapBuild) {
+            this.parseGlobalStyle();
+        } else {
             ClassFieldContainer classFieldContainer = ReflectUtil.getAllFieldsOfClass(dataType);
             filteredFields = getFilteredFields(classFieldContainer, groups);
         }
-
-        htmlToExcelStreamFactory = new HtmlToExcelStreamFactory(waitQueueSize, executorService, pathConsumer, capacity, fixedTitles);
+        htmlToExcelStreamFactory = new HtmlToExcelStreamFactory(waitQueueSize, executorService, pathConsumer, capacity, fixedTitles, styleParser);
         htmlToExcelStreamFactory.widthStrategy(globalSetting.getWidthStrategy());
         if (workbook == null) {
             htmlToExcelStreamFactory.workbookType(globalSetting.getWorkbookType());
         }
-        this.initStyleMap();
         Table table = this.createTable();
         htmlToExcelStreamFactory.start(table, workbook);
 
@@ -307,7 +313,7 @@ public class DefaultStreamExcelBuilder<T> extends AbstractSimpleExcelBuilder imp
         if (isMapBuild) {
             contents = assemblingMapContents((Map<String, Object>) data);
         } else {
-            contents = getRenderContent(data, filteredFields, false);
+            contents = getRenderContent(data, filteredFields);
         }
         Tr tr = this.createTr(contents);
         htmlToExcelStreamFactory.append(tr);

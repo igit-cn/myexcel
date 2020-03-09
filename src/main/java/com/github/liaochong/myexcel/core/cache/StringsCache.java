@@ -60,33 +60,26 @@ public class StringsCache implements Cache<Integer, String> {
 
     private int totalCount;
 
-    private int numberOfCacheFile;
+    private int index;
 
-    private boolean first = true;
-
-    public void init(int totalCount) {
-        this.totalCount = totalCount;
-        this.numberOfCacheFile = totalCount == MAX_SIZE_PATH ? 1 : totalCount / MAX_SIZE_PATH + 1;
-        if (totalCount > MAX_SIZE_PATH) {
-            cacheValues = new String[MAX_SIZE_PATH];
-        } else {
-            cacheValues = new String[totalCount];
+    public void init(int stringCount) {
+        if (stringCount == 0) {
+            return;
         }
+        cacheValues = new String[stringCount > MAX_SIZE_PATH ? MAX_SIZE_PATH : stringCount];
     }
 
     @Override
     public void cache(Integer key, String value) {
         cacheValues[key - (key / MAX_SIZE_PATH * MAX_SIZE_PATH)] = value;
+        totalCount++;
         if ((key + 1) % MAX_SIZE_PATH == 0) {
-            if (numberOfCacheFile == 1) {
-                return;
-            }
-            if (first) {
+            if (index == 0) {
                 String[] preCache = new String[MAX_SIZE_PATH];
                 System.arraycopy(cacheValues, 0, preCache, 0, MAX_SIZE_PATH);
                 activeCache.put(0, preCache);
-                first = false;
             }
+            index++;
             writeToFile();
         }
     }
@@ -117,15 +110,12 @@ public class StringsCache implements Cache<Integer, String> {
     }
 
     public void finished() {
-        if (numberOfCacheFile == 0) {
-            return;
-        }
-        if (numberOfCacheFile == 1) {
+        if (index == 0) {
             activeCache.put(0, cacheValues);
             return;
         }
-        int remainder = totalCount - (numberOfCacheFile - 1) * MAX_SIZE_PATH;
-        if (remainder == MAX_SIZE_PATH) {
+        int remainder = totalCount - index * MAX_SIZE_PATH;
+        if (remainder == 0) {
             cacheValues = null;
             return;
         }
