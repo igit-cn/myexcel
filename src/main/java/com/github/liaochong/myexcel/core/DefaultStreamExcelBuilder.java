@@ -305,6 +305,16 @@ public class DefaultStreamExcelBuilder<T> extends AbstractSimpleExcelBuilder imp
         return this;
     }
 
+    public DefaultStreamExcelBuilder<T> titleRowHeight(int titleRowHeight) {
+        this.configuration.setTitleRowHeight(titleRowHeight);
+        return this;
+    }
+
+    public DefaultStreamExcelBuilder<T> rowHeight(int rowHeight) {
+        this.configuration.setRowHeight(rowHeight);
+        return this;
+    }
+
     /**
      * 流式构建启动，包含一些初始化操作
      *
@@ -367,12 +377,23 @@ public class DefaultStreamExcelBuilder<T> extends AbstractSimpleExcelBuilder imp
         if (data == null) {
             return;
         }
-        List<Pair<? extends Class, ?>> contents;
         if (isMapBuild) {
-            contents = assemblingMapContents((Map<String, Object>) data);
-        } else {
-            contents = getRenderContent(data, filteredFields);
+            List<Pair<? extends Class, ?>> contents = assemblingMapContents((Map<String, Object>) data);
+            this.appendTr(contents);
+            return;
         }
+        if (hasMultiColumn) {
+            List<List<Pair<? extends Class, ?>>> contents = this.getMultiRenderContent(data, filteredFields);
+            for (List<Pair<? extends Class, ?>> content : contents) {
+                this.appendTr(content);
+            }
+        } else {
+            List<Pair<? extends Class, ?>> contents = this.getOriginalRenderContent(data, filteredFields);
+            this.appendTr(contents);
+        }
+    }
+
+    private void appendTr(List<Pair<? extends Class, ?>> contents) {
         Tr tr = this.createTr(contents);
         htmlToExcelStreamFactory.append(tr);
     }
