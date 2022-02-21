@@ -30,6 +30,8 @@ import com.github.liaochong.myexcel.core.style.TdDefaultCellStyle;
 import com.github.liaochong.myexcel.core.style.TextAlignStyle;
 import com.github.liaochong.myexcel.core.style.ThDefaultCellStyle;
 import com.github.liaochong.myexcel.core.style.WordBreakStyle;
+import com.github.liaochong.myexcel.exception.ExcelBuildException;
+import com.github.liaochong.myexcel.utils.ColorUtil;
 import com.github.liaochong.myexcel.utils.StringUtil;
 import com.github.liaochong.myexcel.utils.TdUtil;
 import org.apache.poi.common.usermodel.HyperlinkType;
@@ -40,6 +42,7 @@ import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.ClientAnchor;
+import org.apache.poi.ss.usermodel.Comment;
 import org.apache.poi.ss.usermodel.CreationHelper;
 import org.apache.poi.ss.usermodel.DataFormat;
 import org.apache.poi.ss.usermodel.DataValidation;
@@ -48,19 +51,24 @@ import org.apache.poi.ss.usermodel.DataValidationHelper;
 import org.apache.poi.ss.usermodel.Drawing;
 import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.usermodel.Hyperlink;
-import org.apache.poi.ss.usermodel.Picture;
 import org.apache.poi.ss.usermodel.RichTextString;
 import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.ShapeTypes;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.util.CellRangeAddressList;
-import org.apache.poi.util.Units;
 import org.apache.poi.xssf.streaming.SXSSFSheet;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.apache.poi.xssf.usermodel.XSSFClientAnchor;
 import org.apache.poi.xssf.usermodel.XSSFDataValidation;
+import org.apache.poi.xssf.usermodel.XSSFDrawing;
 import org.apache.poi.xssf.usermodel.XSSFRichTextString;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFSimpleShape;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -78,6 +86,14 @@ import java.util.Objects;
  */
 public abstract class AbstractExcelFactory implements ExcelFactory {
 
+    private static final Logger logger = LoggerFactory.getLogger(AbstractExcelFactory.class);
+
+    private static Map<String, String> DEFAULT_TD_STYLE;
+
+    private static Map<String, String> DEFAULT_TH_STYLE;
+
+    private static Map<String, String> DEFAULT_LINK_STYLE;
+
     protected Workbook workbook;
     /**
      * 是否为hssf
@@ -91,6 +107,10 @@ public abstract class AbstractExcelFactory implements ExcelFactory {
      * 是否使用默认样式
      */
     private boolean useDefaultStyle;
+    /**
+     * 是否应用默认样式，允许覆盖
+     */
+    private boolean applyDefaultStyle;
     /**
      * 自定义颜色
      */
@@ -127,10 +147,34 @@ public abstract class AbstractExcelFactory implements ExcelFactory {
     private CreationHelper createHelper;
 
     private DataFormat format;
+    /**
+     * 图片路径缓存
+     */
+    private Map<String, Integer> imageMapping;
 
     @Override
     public ExcelFactory useDefaultStyle() {
         this.useDefaultStyle = true;
+        return this;
+    }
+
+    @Override
+    public ExcelFactory applyDefaultStyle() {
+        this.applyDefaultStyle = true;
+        if (DEFAULT_TD_STYLE == null) {
+            DEFAULT_TD_STYLE = new HashMap<String, String>() {{
+                put("text-align", "center");
+                put("vertical-align", "center");
+                put("border-style", "thin");
+            }};
+            DEFAULT_TH_STYLE = new HashMap<String, String>(DEFAULT_TD_STYLE) {{
+                put("font-weight", "bold");
+            }};
+            DEFAULT_LINK_STYLE = new HashMap<String, String>(DEFAULT_TD_STYLE) {{
+                put("text-decoration", "underline");
+                put("color", "blue");
+            }};
+        }
         return this;
     }
 
@@ -149,9 +193,6 @@ public abstract class AbstractExcelFactory implements ExcelFactory {
             case XLS:
                 workbook = new HSSFWorkbook();
                 isHssf = true;
-                break;
-            case XLSX:
-                workbook = new XSSFWorkbook();
                 break;
             case SXLSX:
                 workbook = new SXSSFWorkbook(1);
@@ -196,34 +237,34 @@ public abstract class AbstractExcelFactory implements ExcelFactory {
      * @param sheet sheet
      */
     protected void createRow(Tr tr, Sheet sheet) {
-        Row row = sheet.createRow(tr.getIndex());
-        if (!tr.isVisibility()) {
+        Row row = sheet.createRow(tr.index);
+        if (!tr.visibility) {
             row.setZeroHeight(true);
         }
-        stagingTds.stream().filter(blankTd -> Objects.equals(blankTd.getRow(), tr.getIndex())).forEach(td -> {
-            if (tr.getTdList() == Collections.EMPTY_LIST) {
-                tr.setTdList(new LinkedList<>());
+        stagingTds.stream().filter(blankTd -> Objects.equals(blankTd.row, tr.index)).forEach(td -> {
+            if (tr.tdList == Collections.EMPTY_LIST) {
+                tr.tdList = new LinkedList<>();
             }
-            tr.getTdList().add(td);
+            tr.tdList.add(td);
         });
-        for (Td td : tr.getTdList()) {
+        for (Td td : tr.tdList) {
             this.createCell(td, sheet, row);
-            if (td.getRowSpan() == 0) {
+            if (td.rowSpan == 0) {
                 continue;
             }
-            for (int i = td.getRow() + 1, rowBound = td.getRowBound(); i <= rowBound; i++) {
-                for (int j = td.getCol(), colBound = td.getColBound(); j <= colBound; j++) {
+            for (int i = td.row + 1, rowBound = td.getRowBound(); i <= rowBound; i++) {
+                for (int j = td.col, colBound = td.getColBound(); j <= colBound; j++) {
                     Td blankTd = new Td(i, j);
-                    blankTd.setTh(td.isTh());
-                    blankTd.setStyle(td.getStyle());
+                    blankTd.th = td.th;
+                    blankTd.style = td.style;
                     stagingTds.add(blankTd);
                 }
             }
         }
         // 移除暂存区空白单元格
-        stagingTds.removeIf(td -> Objects.equals(td.getRow(), tr.getIndex()));
-        if (tr.getHeight() > 0) {
-            row.setHeightInPoints(tr.getHeight());
+        stagingTds.removeIf(td -> Objects.equals(td.row, tr.index));
+        if (tr.height > 0) {
+            row.setHeightInPoints(tr.height);
         } else {
             // 设置行高，最小12
             if (maxTdHeightMap.get(row.getRowNum()) == null) {
@@ -244,54 +285,50 @@ public abstract class AbstractExcelFactory implements ExcelFactory {
      */
     protected void createCell(Td td, Sheet sheet, Row currentRow) {
         Cell cell;
-        if (td.isFormula()) {
-            cell = currentRow.createCell(td.getCol(), CellType.FORMULA);
-            cell.setCellFormula(td.getContent());
+        if (td.formula) {
+            cell = currentRow.createCell(td.col, CellType.FORMULA);
+            cell.setCellFormula(td.content);
         } else {
-            String content = td.getContent();
-            switch (td.getTdContentType()) {
-                case STRING:
-                    cell = currentRow.createCell(td.getCol(), CellType.STRING);
-                    cell.setCellValue(content);
-                    break;
+            String content = td.content;
+            switch (td.tdContentType) {
                 case DOUBLE:
-                    cell = currentRow.createCell(td.getCol(), CellType.NUMERIC);
+                    cell = currentRow.createCell(td.col, CellType.NUMERIC);
                     if (null != content) {
                         cell.setCellValue(Double.parseDouble(content));
                     }
                     break;
                 case DATE:
-                    cell = currentRow.createCell(td.getCol());
-                    if (td.getDate() != null) {
-                        cell.setCellValue(td.getDate());
-                    } else if (td.getLocalDateTime() != null) {
-                        cell.setCellValue(td.getLocalDateTime());
-                    } else if (td.getLocalDate() != null) {
-                        cell.setCellValue(td.getLocalDate());
+                    cell = currentRow.createCell(td.col);
+                    if (td.date != null) {
+                        cell.setCellValue(td.date);
+                    } else if (td.localDateTime != null) {
+                        cell.setCellValue(td.localDateTime);
+                    } else if (td.localDate != null) {
+                        cell.setCellValue(td.localDate);
                     }
                     break;
                 case BOOLEAN:
-                    cell = currentRow.createCell(td.getCol(), CellType.BOOLEAN);
+                    cell = currentRow.createCell(td.col, CellType.BOOLEAN);
                     if (null != content) {
                         cell.setCellValue(Boolean.parseBoolean(content));
                     }
                     break;
                 case NUMBER_DROP_DOWN_LIST:
-                    cell = currentRow.createCell(td.getCol(), CellType.NUMERIC);
+                    cell = currentRow.createCell(td.col, CellType.NUMERIC);
                     String firstEle = setDropDownList(td, sheet, content);
                     if (firstEle != null) {
                         cell.setCellValue(Double.parseDouble(firstEle));
                     }
                     break;
                 case BOOLEAN_DROP_DOWN_LIST:
-                    cell = currentRow.createCell(td.getCol(), CellType.BOOLEAN);
+                    cell = currentRow.createCell(td.col, CellType.BOOLEAN);
                     firstEle = setDropDownList(td, sheet, content);
                     if (firstEle != null) {
                         cell.setCellValue(Boolean.parseBoolean(firstEle));
                     }
                     break;
                 case DROP_DOWN_LIST:
-                    cell = currentRow.createCell(td.getCol(), CellType.STRING);
+                    cell = currentRow.createCell(td.col, CellType.STRING);
                     firstEle = setDropDownList(td, sheet, content);
                     if (firstEle != null) {
                         cell.setCellValue(firstEle);
@@ -304,109 +341,189 @@ public abstract class AbstractExcelFactory implements ExcelFactory {
                     cell = setLink(td, currentRow, HyperlinkType.EMAIL);
                     break;
                 case IMAGE:
-                    cell = currentRow.createCell(td.getCol());
+                    cell = currentRow.createCell(td.col);
                     setImage(td, sheet);
                     break;
                 default:
-                    cell = currentRow.createCell(td.getCol(), CellType.STRING);
+                    cell = currentRow.createCell(td.col, CellType.STRING);
                     cell.setCellValue(content);
                     break;
             }
             this.setPrompt(td, sheet);
         }
-
+        // 设置斜线
+        this.drawingSlant(td, sheet);
+        // 设置批注
+        this.setComment(td, sheet, cell);
         // 设置单元格样式
         this.setCellStyle(currentRow, cell, td);
-        if (td.getCol() != td.getColBound()) {
-            for (int j = td.getCol() + 1, colBound = td.getColBound(); j <= colBound; j++) {
+        if (td.col != td.getColBound()) {
+            for (int j = td.col + 1, colBound = td.getColBound(); j <= colBound; j++) {
                 cell = currentRow.createCell(j);
                 this.setCellStyle(currentRow, cell, td);
             }
         }
-        if (td.getColSpan() > 0 || td.getRowSpan() > 0) {
-            sheet.addMergedRegion(new CellRangeAddress(td.getRow(), td.getRowBound(), td.getCol(), td.getColBound()));
+        if (td.colSpan > 0 || td.rowSpan > 0) {
+            sheet.addMergedRegion(new CellRangeAddress(td.row, td.getRowBound(), td.col, td.getColBound()));
         }
     }
 
-    private void setPrompt(Td td, Sheet sheet) {
-        if (td.getPromptContainer() == null) {
+    private void setComment(Td td, Sheet sheet, Cell cell) {
+        if (td.comment == null) {
             return;
         }
-        if (ContentTypeEnum.isDropdownList(td.getTdContentType())) {
+        if (createHelper == null) {
+            createHelper = workbook.getCreationHelper();
+        }
+        Drawing<?> drawing = sheet.getDrawingPatriarch();
+        if (drawing == null) {
+            drawing = sheet.createDrawingPatriarch();
+        }
+        ClientAnchor anchor = createHelper.createClientAnchor();
+        anchor.setCol1(cell.getColumnIndex());
+        anchor.setCol2(cell.getColumnIndex() + 2);
+        anchor.setRow1(td.row);
+        anchor.setRow2(td.getRowBound() + 2);
+        Comment comment = drawing.createCellComment(anchor);
+        RichTextString str = createHelper.createRichTextString(td.comment.text);
+        comment.setString(str);
+        comment.setAuthor(td.comment.author);
+        cell.setCellComment(comment);
+    }
+
+    private void drawingSlant(Td td, Sheet sheet) {
+        if (td.slant == null) {
+            return;
+        }
+        if (isHssf) {
+            throw new UnsupportedOperationException("The current workbook does not support setting slashes.");
+        }
+        XSSFDrawing drawing;
+        if (workbook instanceof SXSSFWorkbook) {
+            drawing = ((SXSSFSheet) sheet).getDrawingPatriarch();
+            if (drawing == null) {
+                sheet.createDrawingPatriarch();
+                drawing = ((SXSSFSheet) sheet).getDrawingPatriarch();
+            }
+        } else {
+            drawing = ((XSSFSheet) sheet).getDrawingPatriarch();
+            if (drawing == null) {
+                drawing = ((XSSFSheet) sheet).createDrawingPatriarch();
+            }
+        }
+        if (createHelper == null) {
+            createHelper = workbook.getCreationHelper();
+        }
+        ClientAnchor anchor = createHelper.createClientAnchor();
+        // 设置斜线的开始位置
+        anchor.setCol1(td.col);
+        anchor.setRow1(td.row);
+        // 设置斜线的结束位置
+        anchor.setCol2(td.getColBound() + 1);
+        anchor.setRow2(td.getRowBound() + 1);
+        XSSFSimpleShape shape = drawing.createSimpleShape((XSSFClientAnchor) anchor);
+        // 设置形状类型为线型
+        shape.setShapeType(ShapeTypes.LINE);
+        // 设置线宽
+        shape.setLineWidth(td.slant.lineWidth);
+        // 设置线的风格
+        shape.setLineStyle(td.slant.lineStyle);
+        // 设置线的颜色
+        int[] color = ColorUtil.getRGBByColor(td.slant.lineStyleColor);
+        shape.setLineStyleColor(color[0], color[1], color[2]);
+    }
+
+    private void setPrompt(Td td, Sheet sheet) {
+        if (td.promptContainer == null) {
+            return;
+        }
+        if (ContentTypeEnum.isDropdownList(td.tdContentType)) {
             return;
         }
         DataValidationHelper dvHelper = sheet.getDataValidationHelper();
-        DataValidationConstraint constraint = dvHelper.createCustomConstraint("*");
+        DataValidationConstraint constraint = dvHelper.createCustomConstraint("BB1");
         CellRangeAddressList addressList = new CellRangeAddressList(
-                td.getRow(), td.getRowBound(), td.getCol(), td.getColBound());
+                td.row, td.getRowBound(), td.col, td.getColBound());
         DataValidation dataValidation = dvHelper.createValidation(constraint, addressList);
-        dataValidation.createPromptBox(td.getPromptContainer().getTitle(), td.getPromptContainer().getText());
+        dataValidation.createPromptBox(td.promptContainer.title, td.promptContainer.text);
         dataValidation.setShowPromptBox(true);
         sheet.addValidationData(dataValidation);
     }
 
     private void setImage(Td td, Sheet sheet) {
-        if (td.getFile() == null) {
+        if (td.file == null) {
             return;
-        }
-        try {
-            if (createHelper == null) {
-                createHelper = workbook.getCreationHelper();
-            }
-            byte[] bytes = Files.readAllBytes(td.getFile().toPath());
-            String fileName = td.getFile().getName();
-            int format;
-            String suffix = fileName.substring(fileName.lastIndexOf(".") + 1).toLowerCase();
-            switch (suffix) {
-                case "jpg":
-                case "jpeg":
-                    format = Workbook.PICTURE_TYPE_JPEG;
-                    break;
-                case "png":
-                    format = Workbook.PICTURE_TYPE_PNG;
-                    break;
-                case "dib":
-                    format = Workbook.PICTURE_TYPE_DIB;
-                    break;
-                case "emf":
-                    format = Workbook.PICTURE_TYPE_EMF;
-                    break;
-                case "pict":
-                    format = Workbook.PICTURE_TYPE_PICT;
-                    break;
-                case "wmf":
-                    format = Workbook.PICTURE_TYPE_WMF;
-                    break;
-                default:
-                    throw new IllegalArgumentException("Invalid image type");
-            }
-            int pictureIdx = workbook.addPicture(bytes, format);
-            Drawing drawing = sheet.createDrawingPatriarch();
-            ClientAnchor anchor = createHelper.createClientAnchor();
-            anchor.setDx1(isHssf ? 2 : Units.EMU_PER_PIXEL);
-            anchor.setDy1(isHssf ? 2 : Units.EMU_PER_PIXEL);
-            anchor.setCol1(td.getCol());
-            anchor.setRow1(td.getRow());
-            anchor.setCol2(td.getColBound());
-            anchor.setRow2(td.getRowBound());
-            Picture pict = drawing.createPicture(anchor, pictureIdx);
-            pict.resize(1, 1);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private Cell setLink(Td td, Row currentRow, HyperlinkType hyperlinkType) {
-        if (StringUtil.isBlank(td.getContent())) {
-            return currentRow.createCell(td.getCol());
         }
         if (createHelper == null) {
             createHelper = workbook.getCreationHelper();
         }
-        Cell cell = currentRow.createCell(td.getCol(), CellType.STRING);
-        cell.setCellValue(td.getContent());
+        String fileName = td.file.getName();
+        int format;
+        String suffix = fileName.substring(fileName.lastIndexOf(".") + 1).toLowerCase();
+        switch (suffix) {
+            case "jpg":
+            case "jpeg":
+                format = Workbook.PICTURE_TYPE_JPEG;
+                break;
+            case "png":
+                format = Workbook.PICTURE_TYPE_PNG;
+                break;
+            case "dib":
+                format = Workbook.PICTURE_TYPE_DIB;
+                break;
+            case "emf":
+                format = Workbook.PICTURE_TYPE_EMF;
+                break;
+            case "pict":
+                format = Workbook.PICTURE_TYPE_PICT;
+                break;
+            case "wmf":
+                format = Workbook.PICTURE_TYPE_WMF;
+                break;
+            default:
+                throw new IllegalArgumentException("Invalid image type");
+        }
+        ClientAnchor anchor = createHelper.createClientAnchor();
+        anchor.setAnchorType(ClientAnchor.AnchorType.MOVE_AND_RESIZE);
+        anchor.setDx1(0);
+        anchor.setDy1(0);
+        final int emuPerMm = 36000;
+        anchor.setDx2(isHssf ? 1023 : 100 * emuPerMm);
+        anchor.setDy2(isHssf ? 1023 : 99 * emuPerMm);
+        anchor.setCol1(td.col);
+        anchor.setRow1(td.row);
+        anchor.setCol2(td.getColBound());
+        anchor.setRow2(td.getRowBound());
+        Drawing<?> drawing = sheet.getDrawingPatriarch();
+        if (drawing == null) {
+            drawing = sheet.createDrawingPatriarch();
+        }
+        if (imageMapping == null) {
+            imageMapping = new HashMap<>();
+        }
+        Integer pictureIdx = imageMapping.computeIfAbsent(td.file.getAbsolutePath(), s -> {
+            try {
+                byte[] bytes = Files.readAllBytes(td.file.toPath());
+                return workbook.addPicture(bytes, format);
+            } catch (IOException e) {
+                logger.error("read image failure", e);
+                throw new ExcelBuildException("read image failure, path:" + td.file.getAbsolutePath(), e);
+            }
+        });
+        drawing.createPicture(anchor, pictureIdx);
+    }
+
+    private Cell setLink(Td td, Row currentRow, HyperlinkType hyperlinkType) {
+        if (StringUtil.isBlank(td.content)) {
+            return currentRow.createCell(td.col);
+        }
+        if (createHelper == null) {
+            createHelper = workbook.getCreationHelper();
+        }
+        Cell cell = currentRow.createCell(td.col, CellType.STRING);
+        cell.setCellValue(td.content);
         Hyperlink link = createHelper.createHyperlink(hyperlinkType);
-        link.setAddress(td.getLink());
+        link.setAddress(td.link);
         cell.setHyperlink(link);
         return cell;
     }
@@ -416,14 +533,14 @@ public abstract class AbstractExcelFactory implements ExcelFactory {
             throw new IllegalArgumentException("The total number of words in the drop-down list should not exceed 250.");
         }
         CellRangeAddressList addressList = new CellRangeAddressList(
-                td.getRow(), td.getRowBound(), td.getCol(), td.getColBound());
+                td.row, td.getRowBound(), td.col, td.getColBound());
         DataValidationHelper dvHelper = sheet.getDataValidationHelper();
         String[] list = content.split(",");
         DataValidationConstraint dvConstraint = dvHelper.createExplicitListConstraint(list);
         DataValidation validation = dvHelper.createValidation(
                 dvConstraint, addressList);
-        if (td.getPromptContainer() != null) {
-            validation.createPromptBox(td.getPromptContainer().getTitle(), td.getPromptContainer().getText());
+        if (td.promptContainer != null) {
+            validation.createPromptBox(td.promptContainer.title, td.promptContainer.text);
             validation.setShowPromptBox(true);
         }
         if (validation instanceof XSSFDataValidation) {
@@ -447,10 +564,10 @@ public abstract class AbstractExcelFactory implements ExcelFactory {
      */
     private void setCellStyle(Row row, Cell cell, Td td) {
         if (useDefaultStyle) {
-            if (td.isTh()) {
+            if (td.th) {
                 cell.setCellStyle(defaultCellStyleMap.get(HtmlTableParser.HtmlTag.th));
             } else {
-                if (ContentTypeEnum.isLink(td.getTdContentType())) {
+                if (ContentTypeEnum.isLink(td.tdContentType)) {
                     cell.setCellStyle(defaultCellStyleMap.get(HtmlTableParser.HtmlTag.link));
                 } else {
                     cell.setCellStyle(defaultCellStyleMap.get(HtmlTableParser.HtmlTag.td));
@@ -458,31 +575,42 @@ public abstract class AbstractExcelFactory implements ExcelFactory {
             }
         } else {
             this.doSetInnerSpan(cell, td);
-            if (td.getStyle().isEmpty()) {
+            if (td.style.isEmpty() && !applyDefaultStyle) {
                 return;
             }
-            String fs = td.getStyle().get("font-size");
+            String fs = td.style.get("font-size");
             if (fs != null) {
                 short fontSize = (short) TdUtil.getValue(fs);
                 if (fontSize > maxTdHeightMap.getOrDefault(row.getRowNum(), FontStyle.DEFAULT_FONT_SIZE)) {
                     maxTdHeightMap.put(row.getRowNum(), fontSize);
                 }
             }
-            if (cellStyleMap.containsKey(td.getStyle())) {
-                cell.setCellStyle(cellStyleMap.get(td.getStyle()));
+            if (applyDefaultStyle) {
+                if (td.th) {
+                    DEFAULT_TH_STYLE.forEach((k, v) -> td.style.putIfAbsent(k, v));
+                } else {
+                    if (ContentTypeEnum.isLink(td.tdContentType)) {
+                        DEFAULT_LINK_STYLE.forEach((k, v) -> td.style.putIfAbsent(k, v));
+                    } else {
+                        DEFAULT_TD_STYLE.forEach((k, v) -> td.style.putIfAbsent(k, v));
+                    }
+                }
+            }
+            if (cellStyleMap.containsKey(td.style)) {
+                cell.setCellStyle(cellStyleMap.get(td.style));
                 return;
             }
             CellStyle cellStyle = workbook.createCellStyle();
             // background-color
-            BackgroundStyle.setBackgroundColor(cellStyle, td.getStyle(), customColor);
+            BackgroundStyle.setBackgroundColor(cellStyle, td.style, customColor);
             // text-align
-            TextAlignStyle.setTextAlign(cellStyle, td.getStyle());
+            TextAlignStyle.setTextAlign(cellStyle, td.style);
             // border
-            BorderStyle.setBorder(cellStyle, td.getStyle());
+            BorderStyle.setBorder(cellStyle, td.style);
             // word-break
-            WordBreakStyle.setWordBreak(cellStyle, td.getStyle());
+            WordBreakStyle.setWordBreak(cellStyle, td.style);
             // 内容格式
-            String formatStr = td.getStyle().get("format");
+            String formatStr = td.style.get("format");
             if (formatStr != null) {
                 if (format == null) {
                     format = workbook.createDataFormat();
@@ -490,22 +618,22 @@ public abstract class AbstractExcelFactory implements ExcelFactory {
                 cellStyle.setDataFormat(format.getFormat(formatStr));
             }
             // font
-            if (td.getFonts() == null || td.getFonts().isEmpty()) {
-                FontStyle.setFont(() -> workbook.createFont(), cellStyle, td.getStyle(), fontMap, customColor);
+            if (td.fonts == null || td.fonts.isEmpty()) {
+                FontStyle.setFont(() -> workbook.createFont(), cellStyle, td.style, fontMap, customColor);
             }
             cell.setCellStyle(cellStyle);
-            cellStyleMap.put(td.getStyle(), cellStyle);
+            cellStyleMap.put(td.style, cellStyle);
         }
     }
 
     private void doSetInnerSpan(Cell cell, Td td) {
-        if (td.getFonts() == null || td.getFonts().isEmpty()) {
+        if (td.fonts == null || td.fonts.isEmpty()) {
             return;
         }
-        RichTextString richText = isHssf ? new HSSFRichTextString(td.getContent()) : new XSSFRichTextString(td.getContent());
-        for (com.github.liaochong.myexcel.core.parser.Font font : td.getFonts()) {
-            Font f = FontStyle.getFont(font.getStyle(), fontMap, () -> workbook.createFont(), customColor);
-            richText.applyFont(font.getStartIndex(), font.getEndIndex(), f);
+        RichTextString richText = isHssf ? new HSSFRichTextString(td.content) : new XSSFRichTextString(td.content);
+        for (com.github.liaochong.myexcel.core.parser.Font font : td.fonts) {
+            Font f = FontStyle.getFont(font.style, fontMap, () -> workbook.createFont(), customColor);
+            richText.applyFont(font.startIndex, font.endIndex, f);
         }
         cell.setCellValue(richText);
     }
@@ -556,7 +684,7 @@ public abstract class AbstractExcelFactory implements ExcelFactory {
             if (freezePane == null) {
                 throw new IllegalStateException("FreezePane is null");
             }
-            sheet.createFreezePane(freezePane.getColSplit(), freezePane.getRowSplit());
+            sheet.createFreezePane(freezePane.colSplit, freezePane.rowSplit);
         }
     }
 
@@ -570,22 +698,22 @@ public abstract class AbstractExcelFactory implements ExcelFactory {
         if (useDefaultStyle) {
             // 使用默认样式，需要重新修正加粗的标题自适应宽度
             trList.parallelStream().forEach(tr -> {
-                tr.getTdList().stream().filter(Td::isTh).forEach(th -> {
-                    int tdWidth = TdUtil.getStringWidth(th.getContent(), 0.25);
-                    tr.getColWidthMap().put(th.getCol(), tdWidth);
+                tr.tdList.stream().filter(td -> td.th).forEach(th -> {
+                    int tdWidth = TdUtil.getStringWidth(th.content, 0.25);
+                    tr.colWidthMap.put(th.col, tdWidth);
                 });
             });
         }
-        int mapMaxSize = trList.stream().mapToInt(tr -> tr.getColWidthMap().size()).max().orElse(16);
+        int mapMaxSize = trList.stream().mapToInt(tr -> tr.colWidthMap.size()).max().orElse(16);
         Map<Integer, Integer> colMaxWidthMap = new HashMap<>(mapMaxSize);
         trList.forEach(tr -> {
-            tr.getColWidthMap().forEach((k, v) -> {
+            tr.colWidthMap.forEach((k, v) -> {
                 Integer width = colMaxWidthMap.get(k);
                 if (Objects.isNull(width) || v > width) {
                     colMaxWidthMap.put(k, v);
                 }
             });
-            tr.setColWidthMap(null);
+            tr.colWidthMap = null;
         });
         return colMaxWidthMap;
     }
@@ -624,6 +752,7 @@ public abstract class AbstractExcelFactory implements ExcelFactory {
         maxTdHeightMap = new HashMap<>();
         format = null;
         createHelper = null;
+        imageMapping = null;
     }
 
     /**

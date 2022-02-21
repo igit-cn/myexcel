@@ -14,10 +14,10 @@
  */
 package com.github.liaochong.myexcel.core.converter.writer;
 
-import com.github.liaochong.myexcel.core.ConvertContext;
 import com.github.liaochong.myexcel.core.ExcelColumnMapping;
 import com.github.liaochong.myexcel.core.cache.WeakCache;
 import com.github.liaochong.myexcel.core.container.Pair;
+import com.github.liaochong.myexcel.core.converter.ConvertContext;
 import com.github.liaochong.myexcel.core.converter.WriteConverter;
 import com.github.liaochong.myexcel.utils.PropertyUtil;
 
@@ -34,14 +34,14 @@ public class MappingWriteConverter implements WriteConverter {
 
     @Override
     public boolean support(Field field, Class<?> fieldType, Object fieldVal, ConvertContext convertContext) {
-        ExcelColumnMapping mapping = convertContext.getExcelColumnMappingMap().get(field);
-        return mapping != null && !mapping.getMapping().isEmpty();
+        ExcelColumnMapping mapping = convertContext.excelColumnMappingMap.get(field);
+        return mapping != null && !mapping.mapping.isEmpty();
     }
 
     @Override
     public Pair<Class, Object> convert(Field field, Class<?> fieldType, Object fieldVal, ConvertContext convertContext) {
-        ExcelColumnMapping excelColumnMapping = convertContext.getExcelColumnMappingMap().get(field);
-        String cacheKey = excelColumnMapping.getMapping() + "->" + fieldVal;
+        ExcelColumnMapping excelColumnMapping = convertContext.excelColumnMappingMap.get(field);
+        String cacheKey = excelColumnMapping.mapping + "->" + fieldVal;
         Pair<Class, Object> mapping = mappingCache.get(cacheKey);
         if (mapping != null) {
             return mapping;

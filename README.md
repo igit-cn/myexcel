@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="https://github.com/liaochong/myexcel/blob/master/example/src/main/resources/logo1.png" width="300">
+    <img src="https://user-images.githubusercontent.com/8674986/154786667-599f1a18-707f-4a08-857f-de97924401ea.png" width="300">
 </p>
 
 # MyExcel--Excel操作新方式
@@ -36,13 +36,15 @@ https://github.com/liaochong/myexcel/wiki
 
 联系以及问题反馈 | Contact me
 --------------------------
-* QQ群：135520370（已满）、1131988645（未满）
 * Email：liaochong8950@163.com
+* QQ：1131988645
 * Issue：[issues](https://github.com/liaochong/myexcel/issues)
 
 > 如本项目对您有所帮助，烦请点击上方star或者在下方扫码支付任意金额以鼓励作者更好地开发，十分感谢您的关注！
 
 <p>
-    <img src="https://github.com/liaochong/myexcel/blob/master/images/alipay.jpeg" height="250"/>
-    <img src="https://github.com/liaochong/myexcel/blob/master/images/wechat.jpeg"  height="250" >
+    <img width="320" alt="image" src="https://user-images.githubusercontent.com/8674986/154786358-8e6c0d45-4a40-45f0-a7ad-6041ada3882e.JPG">
+</p>
+<p>
+    <img width="320" margin-left alt="image" src="https://user-images.githubusercontent.com/8674986/154786504-23538aa4-6ba8-4a4f-a8bd-aed50763d873.JPG">
 </p>

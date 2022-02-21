@@ -15,17 +15,18 @@
  */
 package com.github.liaochong.myexcel.core.converter;
 
-import com.github.liaochong.myexcel.core.ConvertContext;
 import com.github.liaochong.myexcel.core.cache.WeakCache;
 import com.github.liaochong.myexcel.core.constant.AllConverter;
 import com.github.liaochong.myexcel.core.constant.Constants;
 import com.github.liaochong.myexcel.core.constant.CsvConverter;
 import com.github.liaochong.myexcel.core.container.Pair;
 import com.github.liaochong.myexcel.core.converter.writer.BigDecimalWriteConverter;
+import com.github.liaochong.myexcel.core.converter.writer.CustomWriteConverter;
 import com.github.liaochong.myexcel.core.converter.writer.DateTimeWriteConverter;
 import com.github.liaochong.myexcel.core.converter.writer.DropDownListWriteConverter;
 import com.github.liaochong.myexcel.core.converter.writer.ImageWriteConverter;
 import com.github.liaochong.myexcel.core.converter.writer.LinkWriteConverter;
+import com.github.liaochong.myexcel.core.converter.writer.LocalTimeWriteConverter;
 import com.github.liaochong.myexcel.core.converter.writer.MappingWriteConverter;
 import com.github.liaochong.myexcel.core.converter.writer.MultiWriteConverter;
 import com.github.liaochong.myexcel.core.converter.writer.OriginalWriteConverter;
@@ -54,10 +55,12 @@ public class WriteConverterContext {
 
     static {
         WRITE_CONVERTER_CONTAINER.add(Pair.of(CsvConverter.class, new DateTimeWriteConverter()));
+        WRITE_CONVERTER_CONTAINER.add(Pair.of(AllConverter.class, new LocalTimeWriteConverter()));
         WRITE_CONVERTER_CONTAINER.add(Pair.of(AllConverter.class, new StringWriteConverter()));
         WRITE_CONVERTER_CONTAINER.add(Pair.of(AllConverter.class, new BigDecimalWriteConverter()));
         WRITE_CONVERTER_CONTAINER.add(Pair.of(AllConverter.class, new DropDownListWriteConverter()));
         WRITE_CONVERTER_CONTAINER.add(Pair.of(AllConverter.class, new LinkWriteConverter()));
+        WRITE_CONVERTER_CONTAINER.add(Pair.of(AllConverter.class, new CustomWriteConverter()));
         WRITE_CONVERTER_CONTAINER.add(Pair.of(AllConverter.class, new MappingWriteConverter()));
         WRITE_CONVERTER_CONTAINER.add(Pair.of(AllConverter.class, new ImageWriteConverter()));
         WRITE_CONVERTER_CONTAINER.add(Pair.of(AllConverter.class, new MultiWriteConverter(WRITE_CONVERTER_CONTAINER)));
@@ -80,16 +83,16 @@ public class WriteConverterContext {
     }
 
     public static WriteConverter getWriteConverter(Field field, Class<?> fieldType, Object result, ConvertContext convertContext, List<Pair<Class, WriteConverter>> writeConverterContainer) {
-        WriteConverter writeConverter = convertContext.isConvertCsv() ? CSV_CONVERTER_CACHE.get(Pair.of(field, fieldType)) : EXCEL_CONVERTER_CACHE.get(Pair.of(field, fieldType));
+        WriteConverter writeConverter = convertContext.isConvertCsv ? CSV_CONVERTER_CACHE.get(Pair.of(field, fieldType)) : EXCEL_CONVERTER_CACHE.get(Pair.of(field, fieldType));
         if (writeConverter != null) {
             return writeConverter;
         }
         Optional<WriteConverter> writeConverterOptional = writeConverterContainer.stream()
-                .filter(pair -> (pair.getKey() == convertContext.getConverterType() || pair.getKey() == AllConverter.class) && pair.getValue().support(field, fieldType, result, convertContext))
+                .filter(pair -> (pair.getKey() == convertContext.converterType || pair.getKey() == AllConverter.class) && pair.getValue().support(field, fieldType, result, convertContext))
                 .map(Pair::getValue)
                 .findFirst();
         writeConverter = writeConverterOptional.orElse(ORIGINAL_WRITE_CONVERTER);
-        if (convertContext.isConvertCsv()) {
+        if (convertContext.isConvertCsv) {
             CSV_CONVERTER_CACHE.cache(Pair.of(field, fieldType), writeConverter);
         } else {
             EXCEL_CONVERTER_CACHE.cache(Pair.of(field, fieldType), writeConverter);

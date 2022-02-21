@@ -15,6 +15,7 @@
 package com.github.liaochong.myexcel.core;
 
 import com.github.liaochong.myexcel.core.annotation.ExcelColumn;
+import com.github.liaochong.myexcel.core.converter.ConvertContext;
 import com.github.liaochong.myexcel.core.converter.ReadConverterContext;
 import com.github.liaochong.myexcel.core.reflect.ClassFieldContainer;
 import com.github.liaochong.myexcel.exception.ExcelReadException;
@@ -112,7 +113,7 @@ public class DefaultExcelReader<T> {
         // 全局配置获取
         if (dataType != Map.class) {
             ClassFieldContainer classFieldContainer = ReflectUtil.getAllFieldsOfClass(dataType);
-            ConfigurationUtil.parseConfiguration(classFieldContainer, convertContext.getConfiguration());
+            ConfigurationUtil.parseConfiguration(classFieldContainer, convertContext.configuration);
 
             List<Field> fields = classFieldContainer.getFieldsByAnnotation(ExcelColumn.class);
             fields.forEach(field -> {
@@ -121,7 +122,7 @@ public class DefaultExcelReader<T> {
                     return;
                 }
                 ExcelColumnMapping mapping = ExcelColumnMapping.mapping(excelColumn);
-                convertContext.getExcelColumnMappingMap().put(field, mapping);
+                convertContext.excelColumnMappingMap.put(field, mapping);
             });
         }
     }
